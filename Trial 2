@@ -1,0 +1,66 @@
+import csv
+import urllib.parse
+from time import strftime, localtime
+
+# File containing KPI names and URL encoded queries
+input_file = 'kpi_queries.txt'
+
+# Function to convert epoch time to a readable timestamp
+def convert_epoch_to_timestamp(value):
+    return strftime('%Y-%m-%d %H:%M:%S', localtime(int(value)))
+
+# Function to create a CSV file for each KPI
+def create_csv_for_kpi(kpi_name, query):
+    # Simulated data - replace with actual data fetching logic
+    json_data = {
+        "data": {
+            "result": [
+                {
+                    "metric": {"kubernetes_namespace": "default"},
+                    "values": [
+                        [1725580800, 100],  # [timestamp, value]
+                        [1725584400, 200],  # [timestamp, value]
+                        [1725588000, 300]   # [timestamp, value]
+                    ]
+                }
+            ]
+        }
+    }
+    
+    # List to store data for CSV
+    value_list = []
+
+    # Extracting the data from JSON structure
+    for result in json_data['data']['result']:
+        fqdn = result['metric']['kubernetes_namespace']
+        for v in result['values']:
+            event_time = convert_epoch_to_timestamp(v[0])  # Convert epoch time to human-readable format
+            metric_value = v[1]
+            value_list.append({
+                "fqdn": fqdn,
+                "metric_value": metric_value,
+                "event_time": event_time,
+                "metric_name": kpi_name
+            })
+
+    # Create CSV file named after the KPI
+    csv_filename = f'{kpi_name}.csv'
+
+    # Writing to CSV with specific column headers
+    with open(csv_filename, mode='w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=["fqdn", "metric_value", "event_time", "metric_name"])
+        writer.writeheader()
+        writer.writerows(value_list)
+    
+    print(f'CSV file created for {kpi_name}: {csv_filename}')
+
+# Read the input text file and process each line
+with open(input_file, 'r') as file:
+    for line in file:
+        # Split the line by '|' to get KPI name and URL encoded query
+        kpi_name, url_encoded_query = line.strip().split('|')
+
+        # Create CSV for each KPI
+        create_csv_for_kpi(kpi_name, url_encoded_query)
+
+print("CSV files created for all KPIs.")
