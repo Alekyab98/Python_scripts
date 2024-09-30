@@ -1,0 +1,76 @@
+import csv
+import urllib.parse
+from time import strftime, localtime
+import requests
+import json
+
+# File containing KPI names and URL encoded queries
+input_file = 'kpi_queries.txt'
+
+# Function to convert epoch time to a readable timestamp
+def convert_epoch_to_timestamp(value):
+    return strftime('%Y-%m-%d %H:%M:%S', localtime(int(value)))
+
+# Function to create a CSV file for each KPI
+def create_csv_for_kpi(kpi_name, query):
+    # URL of the API
+    base_url = "https://your-api-url.com/gem/prometheus/api/v1/query_range"
+    
+    # Decode the URL-encoded query
+    decoded_query = urllib.parse.unquote(query)
+
+    # Prepare the full API URL
+    full_url = f"{base_url}?query={decoded_query}&start=1725580800&end=1725667199&step=5m"
+
+    # Add headers if needed (e.g., for Authorization)
+    headers = {
+        'Authorization': 'Basic your_encoded_token_here'
+    }
+
+    # Make the API call using requests
+    response = requests.get(full_url, headers=headers)
+    
+    # Check if the response is successful
+    if response.status_code == 200:
+        # Parse the JSON data from the API response
+        json_data = response.json()
+
+        # List to store data for CSV
+        value_list = []
+
+        # Extract data from the JSON structure
+        for result in json_data['data']['result']:
+            fqdn = result['metric'].get('kubernetes_namespace', 'default')  # Adjust this field as per actual JSON
+            for v in result['values']:
+                event_time = convert_epoch_to_timestamp(v[0])  # Convert epoch time to human-readable format
+                metric_value = v[1]
+                value_list.append({
+                    "fqdn": fqdn,
+                    "metric_value": metric_value,
+                    "event_time": event_time,
+                    "metric_name": kpi_name
+                })
+
+        # Create CSV file named after the KPI
+        csv_filename = f'{kpi_name}.csv'
+
+        # Write the data to a CSV file
+        with open(csv_filename, mode='w', newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=["fqdn", "metric_value", "event_time", "metric_name"])
+            writer.writeheader()
+            writer.writerows(value_list)
+
+        print(f'CSV file created for {kpi_name}: {csv_filename}')
+    else:
+        print(f"Failed to fetch data for {kpi_name}. HTTP Status code: {response.status_code}")
+
+# Read the input text file and process each line
+with open(input_file, 'r') as file:
+    for line in file:
+        # Split the line by '|' to get KPI name and URL encoded query
+        kpi_name, url_encoded_query = line.strip().split('|')
+
+        # Create CSV for each KPI
+        create_csv_for_kpi(kpi_name, url_encoded_query)
+
+print("CSV files created for all KPIs.")
