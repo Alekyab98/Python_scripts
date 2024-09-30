@@ -1,0 +1,70 @@
+import csv
+import subprocess
+import json
+import shlex
+import re
+from time import strftime, localtime
+
+# File containing KPI names and full curl commands
+input_file = 'kpi_queries.txt'
+
+# Function to convert epoch time to a readable timestamp
+def convert_epoch_to_timestamp(value):
+    return strftime('%Y-%m-%d %H:%M:%S', localtime(int(value)))
+
+# Function to parse and execute the curl command and fetch data
+def execute_curl_and_get_data(curl_command):
+    # Using shlex to split the curl command into parts
+    curl_parts = shlex.split(curl_command)
+    
+    # Execute the curl command and capture the output
+    result = subprocess.run(curl_parts, capture_output=True, text=True)
+    
+    # Return the JSON response from the API
+    return result.stdout
+
+# Function to create a CSV file for each KPI
+def create_csv_for_kpi(kpi_name, curl_command):
+    # Execute the curl command and get the response data
+    response_data = execute_curl_and_get_data(curl_command)
+    
+    # Parse the JSON response data
+    json_data = json.loads(response_data)
+
+    # List to store data for CSV
+    value_list = []
+
+    # Extract data from the JSON structure
+    for result in json_data['data']['result']:
+        fqdn = result['metric'].get('kubernetes_namespace', 'default')  # Adjust this field as per actual JSON
+        for v in result['values']:
+            event_time = convert_epoch_to_timestamp(v[0])  # Convert epoch time to human-readable format
+            metric_value = v[1]
+            value_list.append({
+                "fqdn": fqdn,
+                "metric_value": metric_value,
+                "event_time": event_time,
+                "metric_name": kpi_name
+            })
+
+    # Create CSV file named after the KPI
+    csv_filename = f'{kpi_name}.csv'
+
+    # Write the data to a CSV file
+    with open(csv_filename, mode='w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=["fqdn", "metric_value", "event_time", "metric_name"])
+        writer.writeheader()
+        writer.writerows(value_list)
+    
+    print(f'CSV file created for {kpi_name}: {csv_filename}')
+
+# Read the input text file and process each line
+with open(input_file, 'r') as file:
+    for line in file:
+        # Split the line by '|' to get KPI name and full curl command
+        kpi_name, curl_command = line.strip().split('|')
+
+        # Create CSV for each KPI
+        create_csv_for_kpi(kpi_name, curl_command)
+
+print("CSV files created for all KPIs.")
