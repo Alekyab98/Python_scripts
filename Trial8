@@ -1,0 +1,53 @@
+import csv
+import subprocess
+import json
+from time import strftime, localtime
+
+# File containing KPI names and full curl commands
+input_file = 'kpi_curlcmd.txt'
+
+# Function to convert epoch time to a readable timestamp
+def convert_epoch_to_timestamp(value):
+    return strftime('%Y-%m-%d %H:%M:%S', localtime(int(value)))
+
+# Function to execute the curl command and return the response
+def execute_curl_and_get_data(curl_command):
+    bash_command = f'bash -c "{curl_command}"'
+    print(f"Executing bash curl command: {bash_command}")
+    result = subprocess.run(bash_command, shell=True, capture_output=True, text=True)
+
+    # Print the response for debugging
+    if not result.stdout:
+        print(f"Empty response from curl command.")
+        return None
+    
+    print(f"Full Curl response:\n{result.stdout[:300]}...\n")  # Print first 300 chars for debugging
+    
+    if result.returncode != 0:
+        print(f"Error executing curl command: {result.stderr}")
+        return None  # Return None if curl failed
+
+    return result.stdout
+
+# Function to create a CSV file for each KPI
+def create_csv_for_kpi(kpi_name, curl_command):
+    response_data = execute_curl_and_get_data(curl_command)
+    
+    if response_data is None:
+        print(f"Skipping CSV creation for {kpi_name} due to empty or invalid response.")
+        return
+
+    try:
+        json_data = json.loads(response_data)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON for {kpi_name}. Error: {e}")
+        print(f"Raw response was: {response_data}")
+        return  # Skip CSV creation if parsing fails
+
+    value_list = []
+
+    # Ensure that the response contains valid data
+    if json_data.get('status') == 'success' and 'data' in json_data and 'result' in json_data['data']:
+        for result in json_data['data']['result']:
+            fqdn = result['metric'].get('kubernetes_namespace', 'default')  # Extract the 'fqdn'
+            for v in​⬤
