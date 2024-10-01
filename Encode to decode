@@ -13,12 +13,19 @@ def convert_epoch_to_timestamp(value):
 
 # Function to decode the curl command
 def decode_curl_command(encoded_command):
-    return base64.b64decode(encoded_command).decode('utf-8')
+    try:
+        return base64.b64decode(encoded_command).decode('utf-8')
+    except (base64.binascii.Error, UnicodeDecodeError) as e:
+        print(f"Error decoding curl command: {e}")
+        return None
 
 # Execute the curl command
 def execute_curl_and_get_data(curl_command):
     # Decode the curl command
     decoded_command = decode_curl_command(curl_command)
+
+    if decoded_command is None:
+        return None  # Return None if decoding failed
 
     # Execute the decoded curl command
     result = subprocess.run(decoded_command, shell=True, capture_output=True, text=True)
