@@ -4,13 +4,16 @@ import json
 from datetime import datetime, timezone
 import base64
 
-# Function to decode the curl command
-def decode_curl_command(encoded_command):
-    return base64.b64decode(encoded_command).decode('utf-8')
+# File containing KPI names and full curl commands
+input_file = 'kpi_curlcmd.txt'
 
 # Function to convert epoch time to a readable timestamp
 def convert_epoch_to_timestamp(value):
     return datetime.fromtimestamp(int(value), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+# Function to decode the curl command
+def decode_curl_command(encoded_command):
+    return base64.b64decode(encoded_command).decode('utf-8')
 
 # Execute the curl command
 def execute_curl_and_get_data(curl_command):
@@ -25,3 +28,54 @@ def execute_curl_and_get_data(curl_command):
         return None  # Return None if curl failed
 
     return result.stdout
+
+# Create a CSV file for each KPI
+def create_csv_for_kpi(kpi_name, curl_command):
+    response_data = execute_curl_and_get_data(curl_command)
+
+    if response_data is None:
+        print(f"Skipping CSV creation for {kpi_name} due to empty or invalid response.")
+        return
+
+    try:
+        json_data = json.loads(response_data)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON for {kpi_name}. Error: {e}")
+        print(f"Raw response was: {response_data}")
+        return  # Skip CSV creation if parsing fails
+
+    value_list = []
+
+    # Ensure that the response contains valid data
+    if json_data.get('status') == 'success' and 'data' in json_data:
+        for v in json_data['data']:
+            fqd = v['metric'].get('kubernetes_namespace', 'default')  # Extract the 'fqd'
+            event_time = convert_epoch_to_timestamp(v['value'][0])  # epoch time to UTC human-readable format
+            metric_value = v['value'][1]  # Metric value from the response
+            value_list.append({
+                'fqn': fqd,
+                'metric_value': metric_value,
+                'event_time': event_time,
+                'metric_name': kpi_name
+            })
+    else:
+        print(f"Invalid data in the response for {kpi_name}.")
+        return
+
+    # Create CSV file named from the KPI
+    csv_filename = f'{kpi_name}.csv'
+    with open(csv_filename, mode='w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=["fqn", "metric_value", "event_time", "metric_name"])
+        writer.writeheader()
+        writer.writerows(value_list)
+    
+    print(f'CSV file created for {kpi_name}: {csv_filename}')
+
+# Read the input file and process each line
+with open(input_file, 'r') as file:
+    for line in file:
+        # Split the line by '|' to get KPI name and full curl command
+        kpi_name, curl_command = line.strip().split('|')
+        create_csv_for_kpi(kpi_name, curl_command)
+
+print("CSV files created for all KPIs.")
