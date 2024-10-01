@@ -1,0 +1,104 @@
+import csv
+import subprocess
+import json
+from datetime import datetime, timezone
+import base64
+
+# File containing KPI names and full curl commands
+input_file = 'kpi_curlcmd.txt'
+
+# Function to convert epoch time to a readable UTC timestamp
+def convert_epoch_to_timestamp(value):
+    return datetime.utcfromtimestamp(int(value)).replace(tzinfo=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+# Function to decrypt the Base64 encoded curl command
+def decrypt_curl_command(encrypted_command):
+    # Decode the Base64 encoded string
+    try:
+        decrypted_command = base64.b64decode(encrypted_command).decode('utf-8')
+        return decrypted_command
+    except Exception as e:
+        print(f"Error decrypting command: {e}")
+        return None
+
+# Function to execute the curl command using Bash on Windows
+def execute_curl_and_get_data(curl_command):
+    bash_command = f'bash -c "{curl_command}"'
+    print(f"Executing bash curl command: {bash_command}")
+    result = subprocess.run(bash_command, shell=True, capture_output=True, text=True)
+
+    if not result.stdout:
+        print(f"Empty response from curl command.")
+        return None
+    
+    print(f"Full Curl response:\n{result.stdout}\n")  # Print the full response
+    
+    if result.returncode != 0:
+        print(f"Error executing curl command: {result.stderr}")
+        return None  # Return None if curl failed
+
+    return result.stdout
+
+# Function to create a CSV file for each KPI
+def create_csv_for_kpi(kpi_name, encrypted_curl_command):
+    curl_command = decrypt_curl_command(encrypted_curl_command)
+    if curl_command is None:
+        print(f"Skipping CSV creation for {kpi_name} due to decryption failure.")
+        return
+
+    response_data = execute_curl_and_get_data(curl_command)
+    
+    if response_data is None:
+        print(f"Skipping CSV creation for {kpi_name} due to empty or invalid response.")
+        return
+
+    try:
+        json_data = json.loads(response_data)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON for {kpi_name}. Error: {e}")
+        print(f"Raw response was: {response_data}")
+        return  # Skip CSV creation if parsing fails
+
+    value_list = []
+
+    if json_data.get('status') == 'success' and 'data' in json_data and 'result' in json_data['data']:
+        for result in json_data['data']['result']:
+            fqdn = result['metric'].get('kubernetes_namespace', 'default')  # Extract the 'fqdn'
+            for v in result['values']:
+                event_time = convert_epoch_to_timestamp(v[0])  # Convert epoch time to UTC
+                metric_value = v[1]  # Metric value from the response
+                value_list.append({
+                    "fqdn": fqdn,
+                    "metric_value": metric_value,
+                    "event_time": event_time,
+                    "metric_name": kpi_name
+                })
+    else:
+        print(f"Invalid data in the response for {kpi_name}.")
+        return
+
+    csv_filename = f'{kpi_name}.csv'
+
+    with open(csv_filename, mode='w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=["fqdn", "metric_value", "event_time", "metric_name"])
+        writer.writeheader()
+        writer.writerows(value_list)
+    
+    print(f'CSV file created for {kpi_name}: {csv_filename}')
+
+# Read the input text file and process each line
+with open(input_file, 'r') as file:
+    for line in file:
+        line = line.strip()
+        if not line:
+            continue
+        if '|' not in line:
+            print(f"Skipping line due to missing delimiter '|': {line}")
+            continue
+
+        kpi_name, encrypted_curl_command = line.split('|')
+
+        # Create CSV for each KPI
+        create_csv_for_kpi(kpi_name.strip(), encrypted_curl_command.strip())
+
+print("CSV files created for all KPIs.")
