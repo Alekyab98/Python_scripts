@@ -50,4 +50,37 @@ def create_csv_for_kpi(kpi_name, curl_command):
     if json_data.get('status') == 'success' and 'data' in json_data and 'result' in json_data['data']:
         for result in json_data['data']['result']:
             fqdn = result['metric'].get('kubernetes_namespace', 'default')  # Extract the 'fqdn'
-            for v in​⬤
+            for v in result['values']:
+                event_time = convert_epoch_to_timestamp(v[0])  # Convert epoch time to human-readable format
+                metric_value = v[1]  # Metric value from the response
+                value_list.append({
+                    "fqdn": fqdn,
+                    "metric_value": metric_value,
+                    "event_time": event_time,
+                    "metric_name": kpi_name
+                })
+    else:
+        print(f"Invalid data in the response for {kpi_name}.")
+        return
+
+    # Create CSV file named after the KPI
+    csv_filename = f'{kpi_name}.csv'
+
+    # Write the data to a CSV file
+    with open(csv_filename, mode='w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=["fqdn", "metric_value", "event_time", "metric_name"])
+        writer.writeheader()
+        writer.writerows(value_list)
+    
+    print(f'CSV file created for {kpi_name}: {csv_filename}')
+
+# Read the input text file and process each line
+with open(input_file, 'r') as file:
+    for line in file:
+        # Split the line by '|' to get KPI name and full curl command
+        kpi_name, curl_command = line.strip().split('|')
+
+        # Create CSV for each KPI
+        create_csv_for_kpi(kpi_name, curl_command)
+
+print("CSV files created for all KPIs.")
