@@ -1,0 +1,35 @@
+def format_and_debug_curl_command(base_url, query, start, end, step, encoded_api_key):
+    from urllib.parse import quote
+    
+    # Encode the query
+    encoded_query = quote(query)
+    
+    # Construct the curl command
+    curl_command = (
+        f"curl --location --globoff '{base_url}?query={encoded_query}&start={start}&end={end}&step={step}' "
+        f"--header 'Authorization: Basic {encoded_api_key}'"
+    )
+    
+    # Debugging output
+    print(f"Base URL: {base_url}")
+    print(f"Encoded Query: {encoded_query}")
+    print(f"Start Time: {start}")
+    print(f"End Time: {end}")
+    print(f"Step: {step}")
+    print(f"Encoded API Key: {encoded_api_key}")
+    print(f"Constructed curl command:\n{curl_command}")
+    
+    return curl_command
+
+if __name__ == "__main__":
+    # Define your inputs here
+    base_url = 'https://us.aether.nss.vzwnet.com/gem/prometheus/api/v1/query_range'
+    query = 'sum by (kubernetes_namespace)(sum_over_time(pcmn_VS_MN_NbrRegisteredSub_5GS{h1}))'  # Example query
+    start = '1725588000'  # Example start epoch time
+    end = '1725664800'    # Example end epoch time
+    step = '60'           # Example step interval
+    encoded_api_key = 'YOUR_ENCODED_API_KEY_HERE'  # Replace with your actual encoded API key
+
+    # Generate and print the curl command
+    curl_command = format_and_debug_curl_command(base_url, query, start, end, step, encoded_api_key)
+    print(f"\nFinal Command to Execute:\n{curl_command}")
