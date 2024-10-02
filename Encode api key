@@ -6,5 +6,6 @@ api_key = "YOUR_ACTUAL_API_KEY"
 # Encode the API key
 encoded_key = base64.b64encode(api_key.encode()).decode()
 
-# Output the encoded key
-print(encoded_key)
+# Write the encoded key to a file
+with open('encoded_api_key.txt', 'w') as f:
+    f.write(encoded_key)
