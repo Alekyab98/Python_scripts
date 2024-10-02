@@ -1,7 +1,7 @@
 import csv
 import subprocess
 import json
-from time import strftime, localtime
+from datetime import datetime, timezone
 import base64
 
 def get_decoded_api_key():
@@ -10,7 +10,7 @@ def get_decoded_api_key():
     return base64.b64decode(encoded_key).decode()
 
 def convert_epoch_to_timestamp(value):
-    return strftime('%Y-%m-%d %H:%M:%S', localtime(int(value)))
+    return datetime.fromtimestamp(int(value), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
 def custom_encode_query(query):
     return query.replace(" ","%20")
@@ -31,7 +31,7 @@ def execute_curl_and_get_data(curl_command):
     return result.stdout
 
 def create_csv_for_kpi(kpi_name, query):
-    # Get the decoded API key
+    # Get the encoded API key
     decoded_api_key = get_decoded_api_key()
     if not decoded_api_key:
         print("Skipping CSV creation due to missing API key.")
@@ -45,15 +45,15 @@ def create_csv_for_kpi(kpi_name, query):
     # Construct the curl command correctly
     
     start_epoch = '1725580800'  # Start epoch time as a string
-    end_epoch = '1727839851'    # End epoch time as a string
+    end_epoch = '1725598800'    # End epoch time as a string
     curl_command = (
         f"curl --location --globoff 'https://us.aether.nss.vzwnet.com/gem/prometheus/api/v1/query_range?"
-        f"query={encoded_query}&start={start_epoch}&end={end_epoch}&step=60m' /"
+        f"query={encoded_query}&start={start_epoch}&end={end_epoch}&step=60m'"
         f" --header 'Authorization: Basic {decoded_api_key}'"
     )
 
     # Print the constructed curl command for debugging
-    print(f"Constructed curl command:\n{curl_command}")
+    #print(f"Constructed curl command:\n{curl_command}")
 
     response_data = execute_curl_and_get_data(curl_command)
 
