@@ -1,0 +1,41 @@
+import subprocess
+import json
+
+def execute_curl_command(command):
+    try:
+        # Execute the cURL command
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        
+        # Print the output for debugging
+        print(f"Command Output:\n{result.stdout}")  # Print the standard output
+        print(f"Command Error (if any):\n{result.stderr}")  # Print any error message
+
+        if result.returncode != 0:
+            print("Error executing curl command.")
+            return None
+        
+        # Try to parse JSON response
+        try:
+            response_data = json.loads(result.stdout)
+            print("Successfully parsed JSON response:")
+            print(json.dumps(response_data, indent=4))  # Print the parsed JSON data for clarity
+            return response_data
+        except json.JSONDecodeError as e:
+            print(f"JSON Decode Error: {e}")
+            print("Response was not valid JSON:")
+            print(result.stdout)  # Print the raw output for debugging
+            return None
+    except Exception as e:
+        print(f"Exception occurred: {e}")
+
+# Example usage
+if __name__ == "__main__":
+    # Construct the cURL command (make sure to replace with your actual command)
+    command = 'curl -L --location "https://api.example.com/v1/query_range?query=..." --header "Authorization: Basic <your_encoded_key>"'
+    response = execute_curl_command(command)
+
+    # Handle the response as needed
+    if response:
+        print("Response data processed successfully.")
+    else:
+        print("Failed to process response data.")
