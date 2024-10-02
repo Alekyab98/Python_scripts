@@ -1,0 +1,95 @@
+import csv
+import json
+import subprocess
+from time import strftime, gmtime
+
+def convert_epoch_to_timestamp(value):
+    return strftime('%Y-%m-%d %H:%M:%S', gmtime(int(value)))
+
+def custom_encode_query(query):
+    return query.replace(" ", "%20")
+
+def execute_curl_and_get_data(curl_command):
+    bash_command = f'bash -c "{curl_command}"'
+    # Print the constructed curl command for debugging
+    print(f"Executing bash curl command: {bash_command}")
+    result = subprocess.run(bash_command, shell=True, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print(f"Error executing curl command: {result.stderr}")
+        return None  # Return None if curl failed
+
+    if not result.stdout:
+        print(f"Empty response from curl command.")
+        return None
+
+    return result.stdout
+
+def create_csv_for_kpi(kpi_name, query):
+    # Get the encoded API key
+    decoded_api_key = get_decoded_api_key()
+    if not decoded_api_key:
+        print("Skipping CSV creation due to missing API key.")
+        return
+
+    # Encode the query
+    encoded_query = custom_encode_query(query)
+
+    # Construct the curl command correctly
+    start_epoch = '1725580800'  # Start epoch time as a string
+    end_epoch = '1727839851'    # End epoch time as a string
+    curl_command = (
+        f"curl --location --globoff 'https://us.aether.nss.vzwnet.com/gem/prometheus/api/v1/query_range?"
+        f"query={encoded_query}&start={start_epoch}&end={end_epoch}&step=60m' "
+        f"--header 'Authorization: Basic {decoded_api_key}'"
+    )
+
+    # Print the constructed curl command for debugging
+    print(f"Constructed curl command:\n{curl_command}")
+    response_data = execute_curl_and_get_data(curl_command)
+    
+    if response_data is None:
+        print(f"Skipping CSV creation for {kpi_name} due to empty or invalid response.")
+        return
+
+    try:
+        json_data = json.loads(response_data)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON for {kpi_name}. Error: {e}")
+        print(f"Raw response was: {response_data}")
+        return
+
+    value_list = []
+    if json_data.get('status') == 'success' and 'data' in json_data and 'result' in json_data['data']:
+        for result in json_data['data']['result']:
+            fqdn = result['metric'].get('kubernetes_namespace', 'default')
+            for v in result['values']:
+                event_time = convert_epoch_to_timestamp(v[0])
+                metric_value = v[1]
+                value_list.append({
+                    "fqdn": fqdn,
+                    "metric_value": metric_value,
+                    "event_time": event_time,
+                    "metric_name": kpi_name
+                })
+    else:
+        print(f"Invalid data in the response for {kpi_name}.")
+        return
+
+    csv_filename = f'{kpi_name}.csv'
+    with open(csv_filename, mode='w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=["fqdn", "metric_value", "event_time", "metric_name"])
+        writer.writeheader()
+        writer.writerows(value_list)
+    
+    print(f'CSV file created for {kpi_name}: {csv_filename}')
+
+# Read the input text file and process each line
+input_file = 'kpi_curlcmd.txt'
+with open(input_file, 'r') as file:
+    for line in file:
+        # Split the line by '|' to get KPI name and query
+        kpi_name, query = line.strip().split('|')
+        create_csv_for_kpi(kpi_name, query)
+
+print("CSV files created for all KPIs.")
