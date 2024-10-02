@@ -4,20 +4,6 @@ import json
 from time import strftime, localtime
 from urllib.parse import quote
 
-def custom_encode_query(query):
-    # Split the query by spaces and encode each part selectively
-    encoded_parts = []
-    
-    for part in query.split():
-        if part.startswith('(') and part.endswith(')'):
-            # Keep brackets as is and encode the inside
-            encoded_parts.append('(' + quote(part[1:-1]) + ')')
-        else:
-            # Encode normally
-            encoded_parts.append(quote(part))
-    
-    return ' '.join(encoded_parts)
-
 def get_encoded_api_key():
     with open('encoded_api_key.txt', 'r') as f:
         return f.read().strip()
@@ -46,18 +32,20 @@ def create_csv_for_kpi(kpi_name, query):
         print("Skipping CSV creation due to missing API key.")
         return
 
-    # Encode the query using custom encoding
-    encoded_query = custom_encode_query(query)
+    # Encode the query
+    encoded_query = quote(query)
 
-    # Construct the curl command based on the expected structure
+    # Construct the curl command correctly
+    start_epoch = '1725588000'  # Start epoch time as a string
+    end_epoch = '1725664800'    # End epoch time as a string
     curl_command = (
         f"curl --location --globoff 'https://us.aether.nss.vzwnet.com/gem/prometheus/api/v1/query_range?"
-        f"query={encoded_query}&start=1725588000&end=1725664800&step=60' "
+        f"query={encoded_query}&start={start_epoch}&end={end_epoch}&step=60' "
         f"--header 'Authorization: Basic {encoded_api_key}'"
     )
 
     # Print the constructed curl command for debugging
-    print(f"Constructed curl command: {curl_command}")
+    print(f"Constructed curl command:\n{curl_command}")
 
     response_data = execute_curl_and_get_data(curl_command)
 
