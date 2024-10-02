@@ -1,0 +1,79 @@
+import csv
+import subprocess
+import json
+from time import strftime, localtime
+from urllib.parse import quote
+
+def custom_encode_query(query):
+    # Split the query by spaces and encode each part selectively
+    encoded_parts = []
+    
+    for part in query.split():
+        if part.startswith('(') and part.endswith(')'):
+            # Keep brackets as is and encode the inside
+            encoded_parts.append('(' + quote(part[1:-1]) + ')')
+        else:
+            # Encode normally
+            encoded_parts.append(quote(part))
+    
+    return ' '.join(encoded_parts)
+
+def get_encoded_api_key():
+    with open('encoded_api_key.txt', 'r') as f:
+        return f.read().strip()
+
+def convert_epoch_to_timestamp(value):
+    return strftime('%Y-%m-%d %H:%M:%S', localtime(int(value)))
+
+def execute_curl_and_get_data(curl_command):
+    print(f"Executing curl command: {curl_command}")  # Debugging output
+    result = subprocess.run(curl_command, shell=True, capture_output=True, text=True)
+
+    if not result.stdout:
+        print("Empty response from curl command.")
+        return None
+
+    if result.returncode != 0:
+        print(f"Error executing curl command: {result.stderr}")
+        return None
+
+    return result.stdout
+
+def create_csv_for_kpi(kpi_name, query):
+    # Get the encoded API key
+    encoded_api_key = get_encoded_api_key()
+    if not encoded_api_key:
+        print("Skipping CSV creation due to missing API key.")
+        return
+
+    # Encode the query using custom encoding
+    encoded_query = custom_encode_query(query)
+
+    # Construct the curl command based on the expected structure
+    curl_command = (
+        f"curl --location --globoff 'https://us.aether.nss.vzwnet.com/gem/prometheus/api/v1/query_range?"
+        f"query={encoded_query}&start=1725588000&end=1725664800&step=60' "
+        f"--header 'Authorization: Basic {encoded_api_key}'"
+    )
+
+    # Print the constructed curl command for debugging
+    print(f"Constructed curl command: {curl_command}")
+
+    response_data = execute_curl_and_get_data(curl_command)
+
+    if response_data is None:
+        print(f"Skipping CSV creation for {kpi_name} due to empty or invalid response.")
+        return
+
+    try:
+        json_data = json.loads(response_data)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON for {kpi_name}. Error: {e}")
+        print(f"Raw response was: {response_data}")
+        return
+
+    value_list = []
+
+    if json_data.get('status') == 'success' and 'data' in json_data and 'result' in json_data['data']:
+        for result in json_data['data']['result']:
+            fqdn = result['metric'].get('kubernetes_namespace​⬤
